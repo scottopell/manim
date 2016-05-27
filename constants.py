@@ -77,6 +77,7 @@ TEMPLATE_TEXT_FILE = os.path.join(THIS_DIR, "text_template.tex")
 LOGO_PATH = os.path.join(IMAGE_DIR, "logo.png")
 
 FFMPEG_BIN = "ffmpeg"
+IMAGEMAGICK_BIN = "convert"
 
 
 ### Colors ###

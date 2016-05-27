@@ -41,7 +41,7 @@ NO_SCENE_MESSAGE = """
 
 def get_configuration(sys_argv):
    try:
-      opts, args = getopt.getopt(sys_argv[1:], 'hlmpwsqa')
+      opts, args = getopt.getopt(sys_argv[1:], 'hlmpwsqag')
    except getopt.GetoptError as err:
       print str(err)
       sys.exit(2)
@@ -52,6 +52,7 @@ def get_configuration(sys_argv):
       "camera_config"  : PRODUCTION_QUALITY_CAMERA_CONFIG,
       "preview"        : False,
       "write"          : False,
+      "write_gif"      : False,
       "save_image"     : False,
       "quiet"          : False,
       "write_all"      : False,
@@ -69,6 +70,8 @@ def get_configuration(sys_argv):
          config["preview"] = True
       elif opt == '-w':
          config["write"] = True
+      elif opt == '-g':
+         config["write_gif"] = True
       elif opt == '-s':
          config["save_image"] = True
       elif opt == '-q':
@@ -77,7 +80,7 @@ def get_configuration(sys_argv):
          config["write_all"] = True
          config["quiet"] = True
    #By default, write to file
-   actions = ["write", "preview", "save_image"]
+   actions = ["write", "preview", "save_image", "write_gif"]
    if not any([config[key] for key in actions]):
       config["write"] = True
 
@@ -106,6 +109,8 @@ def handle_scene(scene, **config):
       scene.save_image(path, name)
    if config["write"]:
       scene.write_to_movie(os.path.join(config["movie_prefix"], name))
+   if config["write_gif"]:
+      scene.write_to_gif(os.path.join(config["movie_prefix"], name))
 
    if config["quiet"]:
       sys.stdout.close()

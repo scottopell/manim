@@ -9,6 +9,7 @@ import copy
 from tqdm import tqdm as ProgressDisplay
 import inspect
 import subprocess as sp
+import tempfile
 
 from helpers import *
 
@@ -271,6 +272,115 @@ class Scene(object):
             process.stdin.write(frame.tostring())
         process.stdin.close()
         process.wait()        
+
+    def write_to_gif(self, name = None):
+        if len(self.frames) == 0:
+            print "No frames, I'll just save an image instead"
+            self.show_frame()
+            self.save_image(name = name)
+            return
+        if name is None:
+            name = str(self)
+
+        file_path = self.get_movie_file_path(name, ".gif")
+        print "Writing to %s"%file_path
+
+        fps = int(1/self.frame_duration)
+        height, width = self.camera.pixel_shape
+
+        # details on these flags found at http://superuser.com/a/730389/506167
+        ffmpeg_command = [
+            FFMPEG_BIN,
+            '-y',
+            '-f', 'rawvideo',
+            '-vcodec', 'rawvideo',
+            '-s', '%dx%d'%(width, height),
+            '-pix_fmt', 'rgb24',
+            '-i', '-',
+            '-vf', 'scale=iw:-1', # iw here is input width, then -1 means
+                                  # calculate the height based on aspect ratio
+            '-r', str(fps),
+            '-f', 'image2pipe',   # tells ffmpeg to split the video into images
+                                  # and make it suitable to be piped out
+            '-vcodec', 'ppm',
+            '-'
+        ]
+
+        # delay value should be in ticks and imagemagick does 100 ticks
+        # per second.
+        # More reading / discussion:
+        # http://www.imagemagick.org/discourse-server/viewtopic.php?t=14739
+        # fps = 100 / delay
+        # delay = 100 / fps
+        delay_value = 100 / fps
+        imagemagick_command = [
+            IMAGEMAGICK_BIN,
+            '-delay', str(delay_value),
+            '-loop', '0',
+            '-',
+            file_path
+        ]
+
+        ffmpeg_process = sp.Popen(ffmpeg_command,
+                stdin=sp.PIPE,
+                stdout=sp.PIPE)
+        imagemagick_process = sp.Popen(imagemagick_command,
+                stdin=ffmpeg_process.stdout)
+        for frame in self.frames:
+            ffmpeg_process.stdin.write(frame.tobytes())
+        ffmpeg_process.stdin.close()
+        imagemagick_process.wait()
+
+        return
+        # Below is attempt from http://blog.pkh.me/p/21-high-quality-gif-with-ffmpeg.html
+        # worth revisiting because it should give higher quality results
+        # begin nonworking dead code
+
+        filterstring = "fps=%s,scale=320:-1:flags=lanczos,palettegen" % str(fps)
+        # http://stackoverflow.com/questions/26541416/
+        palettefile = next(tempfile._get_candidate_names()) + ".png"
+
+        command = [
+            FFMPEG_BIN,
+            '-y',                 # overwrite output file if it exists
+            '-f', 'rawvideo',
+            '-vcodec','rawvideo',
+            '-s', '%dx%d'%(width, height), # size of one frame
+            '-pix_fmt', 'rgb24',
+            '-r', str(fps),       # frames per second
+            '-i', '-',            # The imput comes from a pipe
+            '-an',                # Tells FFMPEG not to expect any audio
+            '-vf', filterstring,
+            '-y', palettefile
+        ]
+        process = sp.Popen(command, stdin=sp.PIPE)
+        for frame in self.frames:
+            process.stdin.write(frame.tobytes())
+        process.stdin.close()
+        process.wait()
+
+        command = [
+            FFMPEG_BIN,
+            '-y',                 # overwrite output file if it exists
+            '-f', 'rawvideo',
+            '-vcodec', 'rawvideo',
+            '-s', '%dx%d'%(width, height), # size of one frame
+            '-pix_fmt', 'rgb24',
+            '-r', str(fps),       # frames per second
+            '-i', '-',            # The imput comes from a pipe
+            '-i', palettefile,
+            '-lavfi', '"' + filterstring + '[x]; [x][1:v] paletteuse' + '"',
+            '-loglevel', 'error',
+            '-y', file_path
+        ]
+
+        process = sp.Popen(command, stdin=sp.PIPE)
+        for frame in self.frames:
+            process.stdin.write(frame.tobytes())
+        process.stdin.close()
+        process.wait()
+        # end nonworking code
+
 
     # To list possible args that subclasses have
     # Elements should always be a tuple
